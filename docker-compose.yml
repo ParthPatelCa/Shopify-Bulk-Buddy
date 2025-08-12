@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+    env_file:
+      - .env
+    volumes:
+      - shopify_data:/app/prisma
+      - ./server/src:/app/server/src
+    depends_on:
+      - db
+
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=development
+    env_file:
+      - .env
+    volumes:
+      - ./web/app:/app/web/app
+    depends_on:
+      - server
+
+  db:
+    image: alpine:latest
+    command: tail -f /dev/null
+    volumes:
+      - shopify_data:/data
+
+volumes:
+  shopify_data:

@@ -7,13 +7,17 @@
     "web"
   ],
   "scripts": {
-    "dev": "concurrently \"npm:dev:server\" \"npm:dev:web\"",
+  "predev": "node scripts/checkEnv.mjs && node scripts/checkPorts.mjs",
+  "dev": "concurrently \"npm:dev:server\" \"npm:dev:web\"",
     "dev:server": "npm --workspace server run dev",
     "dev:web": "npm --workspace web run dev",
-    "build": "npm --workspace web run build",
-    "start": "npm --workspace server run start",
+  "build": "npm --workspace web run build",
+  "prestart": "node scripts/checkEnv.mjs",
+  "start": "npm --workspace server run start",
     "prisma:push": "npm --workspace server run prisma:push",
-    "seed": "npm --workspace server run seed"
+    "seed": "npm --workspace server run seed",
+    "type-check": "npm --workspace server run type-check && npm --workspace web run type-check",
+    "test": "npm --workspace server run test"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

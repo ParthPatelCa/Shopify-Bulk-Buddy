@@ -8,6 +8,10 @@ export default function Page() {
   const [rows, setRows] = useState([]);
   const [cursor, setCursor] = useState(null);
   const [hasNext, setHasNext] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [titleFilter, setTitleFilter] = useState('');
+  const [skuFilter, setSkuFilter] = useState('');
+  const [selected, setSelected] = useState(() => new Set()); // Set of variantIds
   const [changes, setChanges] = useState({}); // key: variantId -> { price, sku, weight }
 
   useEffect(() => {
@@ -17,27 +21,39 @@ export default function Page() {
     fetchProducts(s);
   }, []);
 
-  async function fetchProducts(s, c = null) {
-    const q = new URLSearchParams({ shop: s });
-    if (c) q.set('cursor', c);
-    const res = await fetch(`/api/products?${q.toString()}`);
-    const data = await res.json();
-    const flat = [];
-    for (const edge of data.edges || []) {
-      for (const v of edge.node.variants.edges) {
-        flat.push({
-          productId: edge.node.id,
-          title: edge.node.title,
-          variantId: v.node.id,
-          sku: v.node.sku || '',
-          price: v.node.price || '',
-          weight: v.node.weight || 0
-        });
+  async function fetchProducts(s, c = null, replace = false) {
+    if (!s) return;
+    setLoading(true);
+    try {
+      const q = new URLSearchParams({ shop: s });
+      if (c) q.set('cursor', c);
+      const res = await fetch(`/api/products?${q.toString()}`);
+      const data = await res.json();
+      const flat = [];
+      for (const edge of data.edges || []) {
+        for (const v of edge.node.variants.edges) {
+          const record = {
+            productId: edge.node.id,
+            title: edge.node.title,
+            variantId: v.node.id,
+            sku: v.node.sku || '',
+            price: v.node.price || '',
+            weight: v.node.weight || 0
+          };
+          flat.push(record);
+        }
       }
+      setRows(prev => {
+        const base = replace ? [] : prev;
+        const map = new Map(base.map(r => [r.variantId, r]));
+        for (const r of flat) map.set(r.variantId, { ...(map.get(r.variantId) || {}), ...r });
+        return Array.from(map.values());
+      });
+      setCursor(data.pageInfo?.endCursor || null);
+      setHasNext(Boolean(data.pageInfo?.hasNextPage));
+    } finally {
+      setLoading(false);
     }
-    setRows(prev => [...prev, ...flat]);
-    setCursor(data.pageInfo?.endCursor || null);
-    setHasNext(Boolean(data.pageInfo?.hasNextPage));
   }
 
   function onCellChange(variantId, field, value) {
@@ -49,7 +65,29 @@ export default function Page() {
   }
 
   async function loadMore() {
-    if (hasNext) await fetchProducts(shop, cursor);
+    if (hasNext && !loading) await fetchProducts(shop, cursor);
+  }
+
+  function toggleSelectAll(checked) {
+    if (checked) {
+      const allIds = rowsFiltered.map(r => r.variantId);
+      setSelected(prev => new Set([...prev, ...allIds]));
+    } else {
+      // Remove only those currently visible
+      setSelected(prev => {
+        const next = new Set(prev);
+        rowsFiltered.forEach(r => next.delete(r.variantId));
+        return next;
+      });
+    }
+  }
+
+  function toggleRow(id, checked) {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (checked) next.add(id); else next.delete(id);
+      return next;
+    });
   }
 
   async function exportCSV() {
@@ -117,6 +155,17 @@ export default function Page() {
 
   const columnHelper = createColumnHelper();
   const columns = useMemo(() => [
+    {
+      id: 'select',
+      header: () => <input type="checkbox" onChange={e => toggleSelectAll(e.target.checked)} />,
+      cell: ({ row }) => (
+        <input
+          type="checkbox"
+          checked={selected.has(row.original.variantId)}
+          onChange={e => toggleRow(row.original.variantId, e.target.checked)}
+        />
+      )
+    },
     columnHelper.accessor('title', { header: 'Product' }),
     columnHelper.accessor('variantId', { header: 'Variant ID' }),
     columnHelper.accessor('sku', {
@@ -137,16 +186,25 @@ export default function Page() {
         <input defaultValue={getValue()} onChange={e => onCellChange(row.original.variantId, 'weight', e.target.value)} />
       )
     })
-  ], [changes]);
+  ], [changes, selected]);
 
-  const table = useReactTable({ data: rows, columns, getCoreRowModel: getCoreRowModel() });
+  // Client-side filtering (could be server-side later)
+  const rowsFiltered = useMemo(() => {
+    return rows.filter(r => {
+      if (titleFilter && !r.title.toLowerCase().includes(titleFilter.toLowerCase())) return false;
+      if (skuFilter && !r.sku.toLowerCase().includes(skuFilter.toLowerCase())) return false;
+      return true;
+    });
+  }, [rows, titleFilter, skuFilter]);
+
+  const table = useReactTable({ data: rowsFiltered, columns, getCoreRowModel: getCoreRowModel() });
 
   return (
     <div style={{ padding: 16, maxWidth: 1200, margin: '0 auto' }}>
       <h1>Bulk Buddy MVP</h1>
       <p>Shop: <strong>{shop}</strong></p>
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
         <button onClick={() => exportCSV()}>Export CSV</button>
         <label style={{ border: '1px solid #ccc', padding: '6px 12px', cursor: 'pointer' }}>
           Import CSV
@@ -154,7 +212,10 @@ export default function Page() {
         </label>
         <button onClick={preview}>Preview</button>
         <button onClick={applyChanges}>Apply</button>
-        {hasNext && <button onClick={loadMore}>Load more</button>}
+        {hasNext && <button disabled={loading} onClick={loadMore}>{loading ? 'Loading...' : 'Load more'}</button>}
+        <input placeholder="Filter title" value={titleFilter} onChange={e => setTitleFilter(e.target.value)} style={{ padding: 6 }} />
+        <input placeholder="Filter SKU" value={skuFilter} onChange={e => setSkuFilter(e.target.value)} style={{ padding: 6 }} />
+        <span style={{ fontSize: 12, alignSelf: 'center' }}>Selected: {selected.size}</span>
       </div>
 
       <div style={{ overflowX: 'auto' }}>

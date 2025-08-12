@@ -12,6 +12,7 @@ model Shop {
   id           Int      @id @default(autoincrement())
   shop         String   @unique
   accessToken  String
+  keyVersion   Int      @default(1)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
@@ -22,4 +23,21 @@ model Batch {
   description  String
   payloadJson  String   // JSON string describing changes
   createdAt    DateTime @default(now())
+}
+
+model ChangeLog {
+  id          Int      @id @default(autoincrement())
+  shop        String
+  changesJson String   // [{variantId, before:{}, after:{}, metafieldsBefore:[], metafieldsAfter:[]}, ...]
+  checksum    String
+  createdAt   DateTime @default(now())
+}
+
+model Preset {
+  id          Int      @id @default(autoincrement())
+  shop        String
+  name        String
+  filtersJson String
+  columnsJson String
+  createdAt   DateTime @default(now())
 }
