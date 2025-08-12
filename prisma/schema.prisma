@@ -1,0 +1,25 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Shop {
+  id           Int      @id @default(autoincrement())
+  shop         String   @unique
+  accessToken  String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Batch {
+  id           Int      @id @default(autoincrement())
+  shop         String
+  description  String
+  payloadJson  String   // JSON string describing changes
+  createdAt    DateTime @default(now())
+}

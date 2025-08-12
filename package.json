@@ -1,0 +1,21 @@
+{
+  "name": "shopify-bulk-buddy",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "server",
+    "web"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm:dev:server\" \"npm:dev:web\"",
+    "dev:server": "npm --workspace server run dev",
+    "dev:web": "npm --workspace web run dev",
+    "build": "npm --workspace web run build",
+    "start": "npm --workspace server run start",
+    "prisma:push": "npm --workspace server run prisma:push",
+    "seed": "npm --workspace server run seed"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
